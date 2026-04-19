@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamUP Broadcast Example</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.1); /* Slightly dark to see rays better */
+            font-family: 'Inter', sans-serif;
+            pointer-events: none;
+            color: white;
+        }
+        canvas {
+            display: block;
+        }
+        #status {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            opacity: 0.5;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">Waiting for Broadcast Channel data...<br><small>Open hotkey-overlay.html to start hub</small></div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const statusEl = document.getElementById('status');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+        let targetX = mouseX;
+        let targetY = mouseY;
+        let circleColor = '#00d2ff';
+        let ripples = [];
+        let rays = [];
+        let hasData = false;
+
+        // Broadcast Channels
+        const moveChannel = new BroadcastChannel('streamup-hotkey-move');
+        const clickChannel = new BroadcastChannel('streamup-hotkey-mouse-click');
+        const scrollChannel = new BroadcastChannel('streamup-hotkey-mouse-scroll');
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            if (!hasData) {
+                targetX = mouseX = width / 2;
+                targetY = mouseY = height / 2;
+            }
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Listeners
+        moveChannel.onmessage = (e) => {
+            if (!hasData) {
+                hasData = true;
+                statusEl.style.display = 'none';
+            }
+            const sw = window.screen.width || 1920;
+            const sh = window.screen.height || 1080;
+            targetX = (e.data.x / sw) * width;
+            targetY = (e.data.y / sh) * height;
+        };
+
+        clickChannel.onmessage = (e) => {
+            if (!hasData) {
+                hasData = true;
+                statusEl.style.display = 'none';
+            }
+            const action = e.data.toLowerCase();
+            if (action.includes('left')) circleColor = '#0076df';
+            else if (action.includes('right')) circleColor = '#ff453a';
+            else if (action.includes('middle')) circleColor = '#a6e3a1';
+            else if (action.includes('button 4')) circleColor = '#bf94ff'; // Purple
+            else if (action.includes('button 5')) circleColor = '#ff9f0a'; // Orange
+            else if (action.includes('button 6')) circleColor = '#ffd60a'; // Yellow
+
+            ripples.push({
+                x: mouseX,
+                y: mouseY,
+                r: 10,
+                opacity: 0.8
+            });
+        };
+
+        scrollChannel.onmessage = (e) => {
+            if (!hasData) {
+                hasData = true;
+                statusEl.style.display = 'none';
+            }
+            
+            const action = e.data.action;
+            const speed = Math.min(e.data.speed || 1.0, 5.0); // Cap speed for visual sanity
+            
+            // Mapping actions to user-requested degrees (0=Up, 90=Right, 180=Down, 270=Left)
+            const directions = [
+                { name: 'Up',    deg: 0,   color: '#ff9f0a' },
+                { name: 'Right', deg: 90,  color: '#ff375f' },
+                { name: 'Down',  deg: 180, color: '#64d2ff' },
+                { name: 'Left',  deg: 270, color: '#30d158' }
+            ];
+
+            const activeDir = directions.find(d => action.includes(d.name));
+            if (!activeDir) return;
+
+            const subColor = 'rgba(255, 255, 255, 0.1)';
+            
+            // Emit rays in all 4 cardinal directions, highlighting the active one
+            directions.forEach((dir) => {
+                const isPrimary = (dir.name === activeDir.name);
+                
+                // Convert user degrees to math radians
+                // User 0 (Up) -> -90 deg (Math North)
+                // User 90 (Right) -> 0 deg (Math East)
+                // User 180 (Down) -> 90 deg (Math South)
+                // User 270 (Left) -> 180 deg (Math West)
+                const angleRad = (dir.deg - 90) * Math.PI / 180;
+                
+                rays.push({
+                    x: mouseX,
+                    y: mouseY,
+                    angle: angleRad,
+                    dx: Math.cos(angleRad),
+                    dy: Math.sin(angleRad),
+                    length: 0,
+                    width: isPrimary ? (8 + speed * 3) : 2,
+                    opacity: 1,
+                    color: isPrimary ? dir.color : subColor
+                });
+            });
+        };
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Smooth mouse follow
+            mouseX += (targetX - mouseX) * 0.15;
+            mouseY += (targetY - mouseY) * 0.15;
+
+            // Draw Rays
+            for (let i = rays.length - 1; i >= 0; i--) {
+                const r = rays[i];
+                r.length += 15;
+                r.opacity -= 0.02;
+
+                if (r.opacity <= 0) {
+                    rays.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                // Draw ray using dx/dy offsets
+                const grad = ctx.createLinearGradient(
+                    r.x, r.y, 
+                    r.x + r.dx * r.length, r.y + r.dy * r.length
+                );
+                grad.addColorStop(0, r.color);
+                grad.addColorStop(1, 'transparent');
+                
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = r.width;
+                ctx.lineCap = 'round';
+                ctx.globalAlpha = r.opacity;
+                
+                ctx.beginPath();
+                ctx.moveTo(r.x, r.y);
+                ctx.lineTo(r.x + r.dx * r.length, r.y + r.dy * r.length); 
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // Draw Ripples
+            for (let i = ripples.length - 1; i >= 0; i--) {
+                const r = ripples[i];
+                r.r += 4;
+                r.opacity -= 0.02;
+
+                if (r.opacity <= 0) {
+                    ripples.splice(i, 1);
+                    continue;
+                }
+
+                ctx.beginPath();
+                ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+                ctx.strokeStyle = circleColor;
+                ctx.globalAlpha = r.opacity;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Draw Mouse Circle
+            ctx.globalAlpha = 1;
+            ctx.beginPath();
+            ctx.arc(mouseX, mouseY, 8, 0, Math.PI * 2);
+            ctx.fillStyle = circleColor;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = circleColor;
+            ctx.fill();
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

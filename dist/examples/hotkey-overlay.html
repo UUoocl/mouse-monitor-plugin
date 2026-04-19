@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamUP Hotkey Overlay</title>
+    <style>
+        :root {
+            --bg-color: rgba(15, 15, 20, 0.7);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-color: #ffffff;
+            --accent-color: #00d2ff;
+            --glow-color: rgba(0, 210, 255, 0.5);
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+            background: transparent;
+            font-family: var(--font-family);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            pointer-events: none;
+        }
+
+        #history {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: fit-content;
+        }
+
+        .combo-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-color);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s cubic-bezier(0.17, 0.67, 0.83, 1) forwards;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .key {
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .separator {
+            color: var(--accent-color);
+            opacity: 0.8;
+        }
+
+        .mouse-action {
+            color: var(--accent-color);
+            font-style: italic;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(-50px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            to {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+        }
+
+        /* Mouse Position Indicator */
+        #cursor-glow {
+            position: fixed;
+            width: 30px;
+            height: 30px;
+            background: radial-gradient(circle, var(--accent-color) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.2s;
+            filter: blur(4px);
+            box-shadow: 0 0 15px var(--glow-color);
+        }
+
+        #scroll-speed {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            font-size: 0.9rem;
+            color: var(--accent-color);
+            background: var(--bg-color);
+            padding: 5px 10px;
+            border-radius: 20px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        #monitor-panel {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: var(--bg-color);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 0.75rem;
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1000;
+        }
+
+        #monitor-panel h3 {
+            margin: 0 0 10px 0;
+            font-size: 0.8rem;
+            color: var(--accent-color);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        .monitor-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .monitor-label {
+            color: var(--text-color);
+            opacity: 0.6;
+        }
+
+        .monitor-value {
+            color: var(--text-color);
+            font-family: monospace;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 120px;
+            text-align: right;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="monitor-panel">
+        <h3>Broadcast Monitor</h3>
+        <div class="monitor-row">
+            <span class="monitor-label">Keys:</span>
+            <span id="mon-keys" class="monitor-value">None</span>
+        </div>
+        <div class="monitor-row">
+            <span class="monitor-label">Move:</span>
+            <span id="mon-move" class="monitor-value">None</span>
+        </div>
+        <div class="monitor-row">
+            <span class="monitor-label">Click:</span>
+            <span id="mon-click" class="monitor-value">None</span>
+        </div>
+        <div class="monitor-row">
+            <span class="monitor-label">Scroll:</span>
+            <span id="mon-scroll" class="monitor-value">None</span>
+        </div>
+    </div>
+    <div id="cursor-glow"></div>
+    <div id="scroll-speed">Scroll: 0.0</div>
+    <div id="history"></div>
+
+    <script src="./obs-websocket.js"></script>
+    <script>
+        const historyContainer = document.getElementById('history');
+        const cursorGlow = document.getElementById('cursor-glow');
+        const scrollLabel = document.getElementById('scroll-speed');
+
+        const params = new URLSearchParams(window.location.search);
+        const ip = params.get('ip') || '127.0.0.1';
+        const port = params.get('port') || '4455';
+        const password = params.get('pwd') || '';
+        const showMonitor = params.get('monitor') !== '0';
+
+        if (showMonitor) {
+            document.getElementById('monitor-panel').style.display = 'block';
+        }
+
+        const obs = new OBSWebSocket();
+        let clearScrollTimer;
+
+        async function connect() {
+            try {
+                // Use the IP parameter from the URL
+                // Subscribe only to Vendor events (512) to reduce traffic
+                await obs.connect(`ws://${ip}:${port}`, password, {
+                    eventSubscriptions: 512
+                });
+                console.log(`Connected to OBS WebSocket at ${ip}:${port}`);
+            } catch (error) {
+                console.error("Connection failed:", error);
+                setTimeout(connect, 2000);
+            }
+        }
+
+        // Listen for internal OBS events
+        obs.on('ConnectionClosed', () => {
+            console.log("WebSocket closed, retrying...");
+            setTimeout(connect, 2000);
+        });
+
+        // Handle Vendor Events from our C++ plugin
+        obs.on('VendorEvent', (event) => {
+            if (event.vendorName === 'streamup-hotkey-display') {
+                processInput(event.eventData);
+            }
+        });
+
+        // Broadcast Channels for each event type
+        const keyChannel = new BroadcastChannel('streamup-hotkey-keys');
+        const moveChannel = new BroadcastChannel('streamup-hotkey-move');
+        const clickChannel = new BroadcastChannel('streamup-hotkey-mouse-click');
+        const scrollChannel = new BroadcastChannel('streamup-hotkey-mouse-scroll');
+
+        function updateMonitorUI(type, value) {
+            if (!showMonitor) return;
+            const el = document.getElementById(`mon-${type}`);
+            if (el) el.textContent = value;
+        }
+
+        // Internal monitor updates from other sources (if multiple hubs exist)
+        if (showMonitor) {
+            keyChannel.onmessage = (e) => updateMonitorUI('keys', e.data);
+            moveChannel.onmessage = (e) => updateMonitorUI('move', `${Math.round(e.data.x)}, ${Math.round(e.data.y)}`);
+            clickChannel.onmessage = (e) => updateMonitorUI('click', e.data);
+            scrollChannel.onmessage = (e) => updateMonitorUI('scroll', e.data.action);
+        }
+
+        function processInput(event) {
+            // Handle Keyboard/Click Combos
+            if (event.key_combination || (event.mouse && event.mouse.action)) {
+                if (event.mouse && event.mouse.action === "Move") {
+                    // Just a move update, handled below
+                } else {
+                    addCombination(event);
+                    
+                    // Broadcast keyboard combinations (including modified mouse actions)
+                    if (event.key_combination) {
+                        keyChannel.postMessage(event.key_combination);
+                        updateMonitorUI('keys', event.key_combination);
+                    }
+                }
+            }
+
+            // Handle Mouse Position
+            if (event.mouse && event.mouse.x !== undefined) {
+                updateCursor(event.mouse.x, event.mouse.y);
+                
+                // Broadcast move events
+                if (event.mouse.action === "Move") {
+                    moveChannel.postMessage({ x: event.mouse.x, y: event.mouse.y });
+                    updateMonitorUI('move', `${Math.round(event.mouse.x)}, ${Math.round(event.mouse.y)}`);
+                }
+            }
+
+            // Handle Mouse Actions (Clicks/Scroll)
+            if (event.mouse && event.mouse.action) {
+                if (event.mouse.action.includes("Click") || event.mouse.action.includes("Button")) {
+                    clickChannel.postMessage(event.mouse.action);
+                    updateMonitorUI('click', event.mouse.action);
+                } else if (event.mouse.action.includes("Scroll")) {
+                    scrollChannel.postMessage({
+                        action: event.mouse.action,
+                        speed: event.mouse.scroll_speed || 0
+                    });
+                    updateMonitorUI('scroll', event.mouse.action);
+                }
+            }
+
+            // Handle Scroll Speed update
+            if (event.mouse && event.mouse.scroll_speed > 0) {
+                updateScroll(event.mouse.scroll_speed);
+            }
+        }
+
+        function addCombination(event) {
+            const container = document.createElement('div');
+            container.className = 'combo-container';
+
+            const keys = event.key_combination ? event.key_combination.split(' + ') : [];
+            const mouseAction = event.mouse ? event.mouse.action : null;
+
+            keys.forEach((k, i) => {
+                const keyEl = document.createElement('span');
+                keyEl.className = 'key';
+                keyEl.textContent = k;
+                container.appendChild(keyEl);
+
+                if (i < keys.length - 1 || mouseAction) {
+                    const sep = document.createElement('span');
+                    sep.className = 'separator';
+                    sep.textContent = ' + ';
+                    container.appendChild(sep);
+                }
+            });
+
+            if (mouseAction && mouseAction !== "Move") {
+                const mouseEl = document.createElement('span');
+                mouseEl.className = 'mouse-action';
+                mouseEl.textContent = mouseAction;
+                container.appendChild(mouseEl);
+            }
+
+            historyContainer.appendChild(container);
+
+            if (historyContainer.children.length > 5) {
+                historyContainer.removeChild(historyContainer.children[0]);
+            }
+
+            setTimeout(() => {
+                container.style.animation = 'fadeOut 0.5s forwards';
+                setTimeout(() => {
+                    if (container.parentNode) container.remove();
+                }, 500);
+            }, 3000);
+        }
+
+        function updateCursor(x, y) {
+            cursorGlow.style.opacity = '1';
+            cursorGlow.style.left = `${(x / window.screen.width) * 100}vw`;
+            cursorGlow.style.top = `${(y / window.screen.height) * 100}vh`;
+
+            clearTimeout(window.cursorTimer);
+            window.cursorTimer = setTimeout(() => {
+                cursorGlow.style.opacity = '0';
+            }, 1000);
+        }
+
+        function updateScroll(speed) {
+            scrollLabel.style.opacity = '1';
+            scrollLabel.textContent = `Scroll: ${speed.toFixed(2)}`;
+
+            clearTimeout(clearScrollTimer);
+            clearScrollTimer = setTimeout(() => {
+                scrollLabel.style.opacity = '0';
+            }, 500);
+        }
+
+        connect();
+    </script>
+</body>
+
+</html>
