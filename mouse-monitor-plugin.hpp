@@ -22,10 +22,6 @@ extern bool sendPosition;
 extern uint64_t mouseFps;
 extern std::atomic<uint64_t> moveThrottleMs;
 
-extern std::string clickTarget;
-extern std::string scrollTarget;
-extern std::string positionTarget;
-
 extern bool enableLogging;
 
 // Hook functions
@@ -46,6 +42,6 @@ void stopLinuxMouseHook();
 #endif
 
 // Shared functions
-void emitBrowserEvent(const std::string &target, const std::string &action, bool includePosition = false, bool includeScroll = false);
+void broadcastMouseSignal(const char *addr, double val);
 obs_data_t *SaveLoadSettingsCallback(obs_data_t *settings, bool saving);
 void openSettingsDialog();

@@ -212,25 +212,64 @@
 
         let clearScrollTimer;
 
-        // Handle Direct Events from our C++ plugin
-        window.addEventListener('mouse_monitor_event', (event) => {
-            console.log('Direct event received:', event.detail);
-            
-            // OBS emits events with a JSON string in the detail property
-            let data = event.detail;
-            if (typeof data === 'string') {
-                try {
-                    data = JSON.parse(data);
-                } catch (e) {
-                    console.error('Failed to parse event data:', e);
-                    return;
-                }
+        // State tracking
+        let mouseX = 0;
+        let mouseY = 0;
+
+        // WebSocket Connection to Central Bridge (Secure V3 Handshake)
+        async function connectBridge() {
+            try {
+                // 1. Discovery: Identify the bridge port via HTTP API
+                const res = await fetch('/__lws/ws_port');
+                if (!res.ok) throw new Error('Failed to fetch bridge port');
+                
+                const port = (await res.text()).trim();
+                console.log(`Connecting to Media Warp Bridge on port ${port}...`);
+                
+                const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+
+                socket.onopen = () => {
+                    console.log('Bridge connection opened, requesting credentials...');
+                    // 2. Request Handshake: Ask the bridge to emit credentials
+                    socket.send(JSON.stringify({ cmd: "get_obs_credentials" }));
+                };
+
+                socket.onmessage = (msg) => {
+                    try {
+                        const data = JSON.parse(msg.data);
+                        if (data.t === 'mouse') {
+                            processSignal(data);
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse bridge message:', e);
+                    }
+                };
+
+                socket.onclose = () => {
+                    console.warn('Bridge connection lost. Retrying in 2s...');
+                    setTimeout(connectBridge, 2000);
+                };
+
+                socket.onerror = (err) => {
+                    console.error('Bridge socket error:', err);
+                };
+
+            } catch (e) {
+                console.warn('Discovery failed, retrying in 2s...', e);
+                setTimeout(connectBridge, 2000);
             }
-            
-            if (data) {
-                processInput(data);
-            }
+        }
+
+        // 3. Reception: Handle Secure Out-of-Band Callback
+        window.addEventListener('obs_auth', (e) => {
+            const { port, password } = e.detail;
+            console.log(`Received OBS credentials for port ${port}`);
+            // Note: Mouse signals are broadcast publicly via the bridge, 
+            // but credentials can be used here if direct OBS access is needed.
         });
+
+        // Start discovery after 2s delay to allow plugin initialization
+        window.addEventListener('load', () => setTimeout(connectBridge, 2000));
 
         // Broadcast Channels for each event type
         const moveChannel = new BroadcastChannel('mouse-monitor-move');
@@ -250,47 +289,60 @@
             scrollChannel.onmessage = (e) => updateMonitorUI('scroll', e.data.action);
         }
 
-        function processInput(event) {
-            // Handle Keyboard/Click Combos
-            if (event.key_combination || (event.mouse && event.mouse.action)) {
-                if (event.mouse && event.mouse.action === "Move") {
-                    // Just a move update, handled below
-                } else {
-                    addCombination(event);
-                    
-                    // Broadcast keyboard combinations removed in this version
-                }
-            }
+        function processSignal(data) {
+            const { a: addr, v: val } = data;
 
             // Handle Mouse Position
-            if (event.mouse && event.mouse.x !== undefined) {
-                updateCursor(event.mouse.x, event.mouse.y);
-                
-                // Broadcast move events
-                if (event.mouse.action === "Move") {
-                    moveChannel.postMessage({ x: event.mouse.x, y: event.mouse.y });
-                    updateMonitorUI('move', `${Math.round(event.mouse.x)}, ${Math.round(event.mouse.y)}`);
-                }
+            if (addr === "move/x") {
+                mouseX = val;
+                updateCursor(mouseX, mouseY);
+                updateMonitorUI('move', `${Math.round(mouseX)}, ${Math.round(mouseY)}`);
+                moveChannel.postMessage({ x: mouseX, y: mouseY });
+            } else if (addr === "move/y") {
+                mouseY = val;
+                updateCursor(mouseX, mouseY);
+                updateMonitorUI('move', `${Math.round(mouseX)}, ${Math.round(mouseY)}`);
+                moveChannel.postMessage({ x: mouseX, y: mouseY });
             }
 
-            // Handle Mouse Actions (Clicks/Scroll)
-            if (event.mouse && event.mouse.action) {
-                if (event.mouse.action.includes("Click") || event.mouse.action.includes("Button")) {
-                    clickChannel.postMessage(event.mouse.action);
-                    updateMonitorUI('click', event.mouse.action);
-                } else if (event.mouse.action.includes("Scroll")) {
-                    scrollChannel.postMessage({
-                        action: event.mouse.action,
-                        speed: event.mouse.scroll_speed || 0
-                    });
-                    updateMonitorUI('scroll', event.mouse.action);
+            // Handle Clicks
+            if (addr.startsWith("click/")) {
+                const button = addr.split("/")[1];
+                let action = "";
+                switch (button) {
+                    case "left": action = "Left Click"; break;
+                    case "right": action = "Right Click"; break;
+                    case "middle": action = "Middle Click"; break;
+                    default: action = button.toUpperCase().startsWith("X") ? button.toUpperCase() : `Button ${button}`;
                 }
+
+                addCombination({ mouse: { action: action } });
+                clickChannel.postMessage(action);
+                updateMonitorUI('click', action);
             }
 
-            // Handle Scroll Speed update
-            if (event.mouse && event.mouse.scroll_speed > 0) {
-                updateScroll(event.mouse.scroll_speed);
+            // Handle Scroll
+            if (addr === "scroll/v" || addr === "scroll/h") {
+                let action = "";
+                if (addr === "scroll/v") {
+                    action = val > 0 ? "Scroll Up" : "Scroll Down";
+                } else {
+                    action = val > 0 ? "Scroll Left" : "Scroll Right";
+                }
+
+                scrollChannel.postMessage({ action: action, speed: 0 });
+                updateMonitorUI('scroll', action);
+                addCombination({ mouse: { action: action } });
             }
+
+            if (addr === "scroll/speed") {
+                updateScroll(val);
+            }
+        }
+
+        // Deprecated: processInput was used for the old direct event format
+        function processInput(event) {
+            // No longer used, handled by processSignal
         }
 
         function addCombination(event) {
@@ -357,7 +409,7 @@
         }
 
         // Initialization complete
-        console.log('Mouse Monitor Overlay ready for direct events');
+        console.log('Mouse Monitor Overlay ready for bridge signals');
     </script>
 </body>
 

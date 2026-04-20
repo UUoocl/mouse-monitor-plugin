@@ -20,20 +20,14 @@ public:
 private slots:
 	void onApply();
 	void onCancel();
-	void onRefreshSources();
 
 private:
 	void setupUi();
 	void loadSettings();
 	void saveSettings();
-	void populateSources(QComboBox *combo);
 
 	// UI Elements
 	QVBoxLayout *mainLayout;
-	
-	QComboBox *clickTargetCombo;
-	QComboBox *scrollTargetCombo;
-	QComboBox *positionTargetCombo;
 
 	SwitchWidget *enableClicksCheck;
 	SwitchWidget *enableScrollCheck;
@@ -45,5 +39,4 @@ private:
 
 	QPushButton *applyBtn;
 	QPushButton *cancelBtn;
-	QPushButton *refreshBtn;
 };

@@ -1,0 +1,64 @@
+Change Dir: '/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos'
+
+Run Build Command(s): /usr/bin/xcodebuild -project mouse-monitor-plugin.xcodeproj build -configuration Release -parallelizeTargets -hideShellScriptEnvironment -target ALL_BUILD
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project mouse-monitor-plugin.xcodeproj build -configuration Release -parallelizeTargets -hideShellScriptEnvironment -target ALL_BUILD
+
+2026-04-19 23:38:10.309 xcodebuild[63310:843685]  DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
+2026-04-19 23:38:10.314 xcodebuild[63310:843673] [MT] DVTDeviceOperation: Encountered a build number "" that is incompatible with DVTBuildVersion.
+ComputePackagePrebuildTargetDependencyGraph
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (4 targets)
+    Target 'ALL_BUILD' in project 'mouse-monitor-plugin'
+        ➜ Explicit dependency on target 'ZERO_CHECK' in project 'mouse-monitor-plugin'
+        ➜ Explicit dependency on target 'mouse-monitor-plugin' in project 'mouse-monitor-plugin'
+    Target 'mouse-monitor-plugin' in project 'mouse-monitor-plugin'
+        ➜ Explicit dependency on target 'ZERO_CHECK' in project 'mouse-monitor-plugin'
+        ➜ Explicit dependency on target 'mouse-monitor-plugin_autogen' in project 'mouse-monitor-plugin'
+    Target 'mouse-monitor-plugin_autogen' in project 'mouse-monitor-plugin'
+        ➜ Explicit dependency on target 'ZERO_CHECK' in project 'mouse-monitor-plugin'
+    Target 'ZERO_CHECK' in project 'mouse-monitor-plugin' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk /var/folders/jl/tqkb03ks7s393w4t1wr8669w0000gn/C/com.apple.DeveloperTools/26.4-17E192/Xcode/SDKStatCaches.noindex/macosx26.4-25E236-30f9ca8789b706f8bd3fc906a70d770f.sdkstatcache
+    cd /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/mouse-monitor-plugin.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk -o /var/folders/jl/tqkb03ks7s393w4t1wr8669w0000gn/C/com.apple.DeveloperTools/26.4-17E192/Xcode/SDKStatCaches.noindex/macosx26.4-25E236-30f9ca8789b706f8bd3fc906a70d770f.sdkstatcache
+
+PhaseScriptExecution Generate\ CMakeFiles/ZERO_CHECK /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/build/mouse-monitor-plugin.build/Release/ZERO_CHECK.build/Script-F9A409102A019D3CE390351A.sh (in target 'ZERO_CHECK' from project 'mouse-monitor-plugin')
+    cd /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin
+    /bin/sh -c /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/build/mouse-monitor-plugin.build/Release/ZERO_CHECK.build/Script-F9A409102A019D3CE390351A.sh
+make: `/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/CMakeFiles/cmake.check_cache' is up to date.
+
+note: Run script build phase 'Generate CMakeFiles/mouse-monitor-plugin_autogen' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'mouse-monitor-plugin_autogen' from project 'mouse-monitor-plugin')
+PhaseScriptExecution Generate\ CMakeFiles/mouse-monitor-plugin_autogen /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/build/mouse-monitor-plugin.build/Release/mouse-monitor-plugin_autogen.build/Script-59F4CF97B603E0D83227E028.sh (in target 'mouse-monitor-plugin_autogen' from project 'mouse-monitor-plugin')
+    cd /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin
+    /bin/sh -c /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/build/mouse-monitor-plugin.build/Release/mouse-monitor-plugin_autogen.build/Script-59F4CF97B603E0D83227E028.sh
+
+note: Run script build phase 'CMake PostBuild Rules' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'mouse-monitor-plugin' from project 'mouse-monitor-plugin')
+Ld /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/Release/mouse-monitor-plugin.plugin/Contents/MacOS/mouse-monitor-plugin normal (in target 'mouse-monitor-plugin' from project 'mouse-monitor-plugin')
+    cd /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++ -Xlinker -reproducible -target arm64-apple-macos12.0 -bundle -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk -O3 -L/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/build/EagerLinkingTBDs/Release -L/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/Release -L/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/.deps/lib -F/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/build/EagerLinkingTBDs/Release -F/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/Release -F/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/stubs -F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk/System/Library/Frameworks -F/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/.deps/Frameworks -F/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/.deps/obs-deps-qt6-2025-05-23-universal/lib -iframework /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/.deps/obs-deps-qt6-2025-05-23-universal/lib -iframework /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/.deps/Frameworks -filelist /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/build/mouse-monitor-plugin.build/Release/Objects-normal/arm64/mouse-monitor-plugin.LinkFileList -Xlinker -rpath -Xlinker @executable_path/../Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/build/mouse-monitor-plugin.build/Release/Objects-normal/arm64/mouse-monitor-plugin_lto.o -Xlinker -dependency_info -Xlinker /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/build/mouse-monitor-plugin.build/Release/Objects-normal/arm64/mouse-monitor-plugin_dependency_info.dat -Wl,-headerpad_max_install_names -framework IOKit -framework DiskArbitration -framework UniformTypeIdentifiers -framework AGL -framework AppKit -framework OpenGL -framework ImageIO -framework Metal -framework ApplicationServices -framework Carbon -framework libobs /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/.deps/lib/obs-frontend-api.dylib -framework QtCore -framework QtGui -framework QtWidgets -Xlinker -no_adhoc_codesign -o /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/Release/mouse-monitor-plugin.plugin/Contents/MacOS/mouse-monitor-plugin
+/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/mouse-monitor-plugin.xcodeproj: mouse-monitor-plugin: ld: warning: search path '/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/stubs' not found
+ld: framework 'AGL' not found
+/Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/mouse-monitor-plugin.xcodeproj: mouse-monitor-plugin: clang++: error: linker command failed with exit code 1 (use -v to see invocation)
+
+note: Run script build phase 'Generate CMakeFiles/ALL_BUILD' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ALL_BUILD' from project 'mouse-monitor-plugin')
+note: Run script build phase 'Generate CMakeFiles/ZERO_CHECK' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'ZERO_CHECK' from project 'mouse-monitor-plugin')
+** BUILD FAILED **
+
+
+The following build commands failed:
+	Ld /Users/jonwood/Github_local_dev/mediaWarp/mouse-monitor-plugin/build_macos/Release/mouse-monitor-plugin.plugin/Contents/MacOS/mouse-monitor-plugin normal (in target 'mouse-monitor-plugin' from project 'mouse-monitor-plugin')
+(1 failure)
+

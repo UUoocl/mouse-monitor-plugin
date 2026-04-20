@@ -56,13 +56,9 @@ std::atomic<uint64_t> lastMoveTimestamp{0};
 // Settings
 bool sendClicks = true;
 bool sendScroll = true;
-bool sendPosition = false;
+bool sendPosition = true;
 uint64_t mouseFps = 50;
 std::atomic<uint64_t> moveThrottleMs{20};
-
-std::string clickTarget = "";
-std::string scrollTarget = "";
-std::string positionTarget = "";
 
 bool enableLogging = false;
 bool startWithObs = true;
@@ -70,51 +66,43 @@ bool startWithObs = true;
 // UI
 static QPointer<MouseSettingsDialog> settingsDialog;
 
-void emitBrowserEvent(const std::string &target, const std::string &action, bool includePosition, bool includeScroll)
+void broadcastMouseSignal(const char *addr, double val)
 {
-	if (target.empty() || target == "None" || target == "No Browser Sources Found") {
-		return;
+	obs_data_t *packet = obs_data_create();
+	obs_data_set_string(packet, "t", "mouse");
+	obs_data_set_string(packet, "a", addr);
+	obs_data_set_double(packet, "v", val);
+
+	signal_handler_t *sh = obs_get_signal_handler();
+	if (sh) {
+		calldata_t cd = {0};
+		calldata_set_ptr(&cd, "packet", packet);
+		signal_handler_signal(sh, "media_warp_transmit", &cd);
 	}
 
-	obs_source_t *source = obs_get_source_by_name(target.c_str());
-	if (!source) return;
+	obs_data_release(packet);
+}
 
-	proc_handler_t *ph = obs_source_get_proc_handler(source);
-	if (!ph) {
-		obs_source_release(source);
-		return;
+static void on_media_warp_receive(void *data, calldata_t *cd)
+{
+	(void)data;
+	const char *json_str = calldata_string(cd, "json_str");
+	if (!json_str) return;
+
+	obs_data_t *msg = obs_data_create_from_json(json_str);
+	if (!msg) return;
+
+	const char *type = obs_data_get_string(msg, "t");
+	const char *addr = obs_data_get_string(msg, "a");
+
+	if (type && std::string(type) == "control") {
+		if (addr && std::string(addr) == "log_toggle") {
+			enableLogging = !enableLogging;
+			blog(LOG_INFO, "[Mouse Monitor] Logging toggled via remote: %s", enableLogging ? "ON" : "OFF");
+		}
 	}
 
-	obs_data_t *event_data = obs_data_create();
-	obs_data_t *mouse_data = obs_data_create();
-
-	if (!action.empty()) {
-		obs_data_set_string(mouse_data, "action", action.c_str());
-	}
-
-	if (includePosition) {
-		obs_data_set_int(mouse_data, "x", currentMouseX.load());
-		obs_data_set_int(mouse_data, "y", currentMouseY.load());
-	}
-
-	if (includeScroll) {
-		obs_data_set_double(mouse_data, "scroll_speed", currentScrollSpeed.load());
-	}
-
-	obs_data_set_obj(event_data, "mouse", mouse_data);
-	obs_data_release(mouse_data);
-
-	const char *json_data = obs_data_get_json(event_data);
-	
-	calldata_t cd;
-	calldata_init(&cd);
-	calldata_set_string(&cd, "eventName", "mouse_monitor_event");
-	calldata_set_string(&cd, "jsonString", json_data);
-	proc_handler_call(ph, "javascript_event", &cd);
-	calldata_free(&cd);
-
-	obs_data_release(event_data);
-	obs_source_release(source);
+	obs_data_release(msg);
 }
 
 #ifdef _WIN32
@@ -130,7 +118,8 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 			uint64_t now = os_gettime_ns() / 1000000;
 			if (now - lastMoveTimestamp.load() > moveThrottleMs.load()) {
 				lastMoveTimestamp.store(now);
-				emitBrowserEvent(positionTarget, "Move", true, false);
+				broadcastMouseSignal("move/x", (double)p->pt.x);
+				broadcastMouseSignal("move/y", (double)p->pt.y);
 			}
 		}
 
@@ -148,7 +137,16 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 
 		if (!clickAction.empty() && sendClicks) {
 			if (enableLogging) blog(LOG_INFO, "[Mouse Monitor] Click: %s", clickAction.c_str());
-			emitBrowserEvent(clickTarget, clickAction, true, false);
+			
+			std::string addr = "click/";
+			if (wParam == WM_LBUTTONDOWN) addr += "left";
+			else if (wParam == WM_RBUTTONDOWN) addr += "right";
+			else if (wParam == WM_MBUTTONDOWN) addr += "middle";
+			else if (wParam == WM_XBUTTONDOWN) {
+				if (HIWORD(p->mouseData) == XBUTTON1) addr += "x1";
+				else if (HIWORD(p->mouseData) == XBUTTON2) addr += "x2";
+			}
+			broadcastMouseSignal(addr.c_str(), 1.0);
 		}
 
 		// Scroll updates
@@ -172,7 +170,10 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 			}
 
 			if (enableLogging) blog(LOG_INFO, "[Mouse Monitor] Scroll: %s", scrollAction.c_str());
-			emitBrowserEvent(scrollTarget, scrollAction, true, true);
+			
+			broadcastMouseSignal("scroll/delta", delta);
+			broadcastMouseSignal("scroll/speed", currentScrollSpeed.load());
+			broadcastMouseSignal((wParam == WM_MOUSEWHEEL) ? "scroll/v" : "scroll/h", delta);
 		}
 	}
 	return CallNextHookEx(mouseHook, nCode, wParam, lParam);
@@ -193,6 +194,7 @@ CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef e
 	(void)proxy;
 	(void)refcon;
 	if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput) {
+		blog(LOG_INFO, "[Mouse Monitor] Hook disabled by OS, re-enabling...");
 		if (eventTap) CGEventTapEnable(eventTap, true);
 		return event;
 	}
@@ -206,7 +208,8 @@ CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef e
 			uint64_t now = os_gettime_ns() / 1000000;
 			if (now - lastMoveTimestamp.load() > moveThrottleMs.load()) {
 				lastMoveTimestamp.store(now);
-				emitBrowserEvent(positionTarget, "Move", true, false);
+				broadcastMouseSignal("move/x", (double)location.x);
+				broadcastMouseSignal("move/y", (double)location.y);
 			}
 		}
 	}
@@ -247,10 +250,25 @@ CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef e
 
 	if (isClick && sendClicks) {
 		if (enableLogging) blog(LOG_INFO, "[Mouse Monitor] Click: %s", action.c_str());
-		emitBrowserEvent(clickTarget, action, true, false);
+		
+		std::string addr = "click/";
+		if (type == kCGEventLeftMouseDown) addr += "left";
+		else if (type == kCGEventRightMouseDown) addr += "right";
+		else if (type == kCGEventOtherMouseDown) {
+			int64_t buttonNumber = CGEventGetIntegerValueField(event, kCGMouseEventButtonNumber);
+			if (buttonNumber == 2) addr += "middle";
+			else addr += std::to_string(buttonNumber);
+		}
+		broadcastMouseSignal(addr.c_str(), 1.0);
 	} else if (isScroll && sendScroll) {
 		if (enableLogging) blog(LOG_INFO, "[Mouse Monitor] Scroll: %s", action.c_str());
-		emitBrowserEvent(scrollTarget, action, true, true);
+		
+		int64_t deltaY = CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis1);
+		int64_t deltaX = CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis2);
+		
+		if (std::abs(deltaY) > 0) broadcastMouseSignal("scroll/v", (double)deltaY);
+		if (std::abs(deltaX) > 0) broadcastMouseSignal("scroll/h", (double)deltaX);
+		broadcastMouseSignal("scroll/speed", currentScrollSpeed.load());
 	}
 
 	return event;
@@ -275,6 +293,9 @@ void startMacOSMouseHook() {
 		eventSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0);
 		CFRunLoopAddSource(CFRunLoopGetCurrent(), eventSource, kCFRunLoopCommonModes);
 		CGEventTapEnable(eventTap, true);
+		blog(LOG_INFO, "[Mouse Monitor] macOS mouse hook started successfully");
+	} else {
+		blog(LOG_ERROR, "[Mouse Monitor] Failed to create CGEventTap");
 	}
 }
 
@@ -344,9 +365,6 @@ obs_data_t *SaveLoadSettingsCallback(obs_data_t *settings, bool saving)
 		if (mouseFps == 0) mouseFps = 50;
 		moveThrottleMs.store(1000 / mouseFps);
 
-		clickTarget = obs_data_get_string(settings, "clickTarget");
-		scrollTarget = obs_data_get_string(settings, "scrollTarget");
-		positionTarget = obs_data_get_string(settings, "positionTarget");
 		enableLogging = obs_data_get_bool(settings, "enableLogging");
 		startWithObs = obs_data_get_bool(settings, "startWithObs");
 
@@ -375,9 +393,6 @@ bool obs_module_load(void)
 		if (mouseFps == 0) mouseFps = 50;
 		moveThrottleMs.store(1000 / mouseFps);
 
-		clickTarget = obs_data_get_string(settings, "clickTarget");
-		scrollTarget = obs_data_get_string(settings, "scrollTarget");
-		positionTarget = obs_data_get_string(settings, "positionTarget");
 		enableLogging = obs_data_get_bool(settings, "enableLogging");
 		startWithObs = obs_data_get_bool(settings, "startWithObs");
 
@@ -392,6 +407,11 @@ bool obs_module_load(void)
 #ifdef __APPLE__
 		startMacOSMouseHook();
 #endif
+	}
+
+	signal_handler_t *sh = obs_get_signal_handler();
+	if (sh) {
+		signal_handler_connect(sh, "media_warp_receive", on_media_warp_receive, nullptr);
 	}
 
 	obs_frontend_add_event_callback([](enum obs_frontend_event event, void *) {
@@ -414,6 +434,11 @@ void obs_module_unload(void)
 	stopMacOSMouseHook();
 #endif
 	
+	signal_handler_t *sh = obs_get_signal_handler();
+	if (sh) {
+		signal_handler_disconnect(sh, "media_warp_receive", on_media_warp_receive, nullptr);
+	}
+
 	if (settingsDialog) {
 		delete settingsDialog;
 	}
@@ -424,9 +449,6 @@ void obs_module_unload(void)
 	obs_data_set_bool(currentSettings, "sendScroll", sendScroll);
 	obs_data_set_bool(currentSettings, "sendPosition", sendPosition);
 	obs_data_set_int(currentSettings, "mouseFps", mouseFps);
-	obs_data_set_string(currentSettings, "clickTarget", clickTarget.c_str());
-	obs_data_set_string(currentSettings, "scrollTarget", scrollTarget.c_str());
-	obs_data_set_string(currentSettings, "positionTarget", positionTarget.c_str());
 	obs_data_set_bool(currentSettings, "enableLogging", enableLogging);
 	obs_data_set_bool(currentSettings, "startWithObs", startWithObs);
 	

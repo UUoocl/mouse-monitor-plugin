@@ -16,6 +16,17 @@ include(helpers)
 
 if(APPLE)
   set(WrapOpenGL_AGL "" CACHE FILEPATH "" FORCE)
+  
+  # Patch OBS targets to remove legacy AGL framework references
+  foreach(target OBS::libobs OBS::obs-frontend-api)
+    if(TARGET ${target})
+      get_target_property(libs ${target} INTERFACE_LINK_LIBRARIES)
+      if(libs)
+        list(REMOVE_ITEM libs "-framework AGL" "AGL")
+        set_target_properties(${target} PROPERTIES INTERFACE_LINK_LIBRARIES "${libs}")
+      endif()
+    endif()
+  endforeach()
 endif()
 
 add_library(${PROJECT_NAME} MODULE)
@@ -78,12 +89,29 @@ if(APPLE)
   find_library(CARBON_FRAMEWORK Carbon)
   find_library(APP_SERVICES_FRAMEWORK ApplicationServices)
   target_link_libraries(${PROJECT_NAME} PRIVATE ${CARBON_FRAMEWORK} ${APP_SERVICES_FRAMEWORK})
+  target_link_libraries(${PROJECT_NAME} PRIVATE "-F${CMAKE_CURRENT_SOURCE_DIR}/local_frameworks")
 
   set_target_properties(${PROJECT_NAME} PROPERTIES
     XCODE_ATTRIBUTE_FRAMEWORK_SEARCH_PATHS "${CMAKE_BINARY_DIR}/stubs"
     BUILD_WITH_INSTALL_RPATH TRUE
     INSTALL_RPATH "@loader_path/../Frameworks;@loader_path/../../../../Frameworks"
     MACOSX_RPATH TRUE
+  )
+  
+  # Aggressively remove AGL from the target's link list
+  get_target_property(TARGET_LIBS ${PROJECT_NAME} LINK_LIBRARIES)
+  if(TARGET_LIBS)
+      list(REMOVE_ITEM TARGET_LIBS "-framework AGL" "AGL" "/System/Library/Frameworks/AGL.framework")
+      set_target_properties(${PROJECT_NAME} PROPERTIES LINK_LIBRARIES "${TARGET_LIBS}")
+  endif()
+
+  # Enable dead stripping of dylibs to remove unused phantom dependencies like AGL
+  add_link_options("-Wl,-dead_strip_dylibs")
+
+  # Post-build: Redirect the phantom AGL dependency to libresolv to avoid duplicate entry error with OpenGL
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+      COMMAND install_name_tool -change @rpath/AGL.framework/AGL /usr/lib/libresolv.9.dylib "$<TARGET_FILE:${PROJECT_NAME}>" || true
+      COMMENT "Redirecting phantom AGL dependency to libresolv"
   )
 endif()
 

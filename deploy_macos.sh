@@ -48,6 +48,12 @@ for LIB in "${QT_LIBS[@]}"; do
     fi
 done
 
+# 5b. Redirect phantom AGL dependency
+if otool -L "${BINARY_PATH}" | grep -q "AGL.framework"; then
+    echo "Redirecting phantom AGL dependency..."
+    install_name_tool -change @rpath/AGL.framework/AGL /usr/lib/libresolv.9.dylib "${BINARY_PATH}"
+fi
+
 # 6. Ad-hoc Codesign (Required for macOS 15+)
 echo "Performing ad-hoc code signing..."
 codesign -s - --force "${BINARY_PATH}"
