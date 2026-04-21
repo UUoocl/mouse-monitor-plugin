@@ -60,7 +60,6 @@ bool sendPosition = true;
 uint64_t mouseFps = 50;
 std::atomic<uint64_t> moveThrottleMs{20};
 
-bool enableLogging = false;
 bool startWithObs = true;
 
 // UI
@@ -95,12 +94,9 @@ static void on_media_warp_receive(void *data, calldata_t *cd)
 	const char *type = obs_data_get_string(msg, "t");
 	const char *addr = obs_data_get_string(msg, "a");
 
-	if (type && std::string(type) == "control") {
-		if (addr && std::string(addr) == "log_toggle") {
-			enableLogging = !enableLogging;
-			blog(LOG_INFO, "[Mouse Monitor] Logging toggled via remote: %s", enableLogging ? "ON" : "OFF");
-		}
-	}
+	// No control messages currently handled
+	(void)type;
+	(void)addr;
 
 	obs_data_release(msg);
 }
@@ -136,7 +132,6 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 		}
 
 		if (!clickAction.empty() && sendClicks) {
-			if (enableLogging) blog(LOG_INFO, "[Mouse Monitor] Click: %s", clickAction.c_str());
 			
 			std::string addr = "click/";
 			if (wParam == WM_LBUTTONDOWN) addr += "left";
@@ -169,8 +164,6 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 				scrollAction = (delta > 0) ? "Scroll Right" : "Scroll Left";
 			}
 
-			if (enableLogging) blog(LOG_INFO, "[Mouse Monitor] Scroll: %s", scrollAction.c_str());
-			
 			broadcastMouseSignal("scroll/delta", delta);
 			broadcastMouseSignal("scroll/speed", currentScrollSpeed.load());
 			broadcastMouseSignal((wParam == WM_MOUSEWHEEL) ? "scroll/v" : "scroll/h", delta);
@@ -249,7 +242,6 @@ CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef e
 	}
 
 	if (isClick && sendClicks) {
-		if (enableLogging) blog(LOG_INFO, "[Mouse Monitor] Click: %s", action.c_str());
 		
 		std::string addr = "click/";
 		if (type == kCGEventLeftMouseDown) addr += "left";
@@ -261,7 +253,6 @@ CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef e
 		}
 		broadcastMouseSignal(addr.c_str(), 1.0);
 	} else if (isScroll && sendScroll) {
-		if (enableLogging) blog(LOG_INFO, "[Mouse Monitor] Scroll: %s", action.c_str());
 		
 		int64_t deltaY = CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis1);
 		int64_t deltaX = CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis2);
@@ -350,7 +341,7 @@ obs_data_t *SaveLoadSettingsCallback(obs_data_t *settings, bool saving)
 			}
 
 			if (obs_data_save_json(settings, path)) {
-				if (enableLogging) blog(LOG_INFO, "[Mouse Monitor] Settings saved to: %s", path);
+				// Success
 			} else {
 				blog(LOG_ERROR, "[Mouse Monitor] Failed to save settings to: %s", path);
 			}
@@ -365,7 +356,6 @@ obs_data_t *SaveLoadSettingsCallback(obs_data_t *settings, bool saving)
 		if (mouseFps == 0) mouseFps = 50;
 		moveThrottleMs.store(1000 / mouseFps);
 
-		enableLogging = obs_data_get_bool(settings, "enableLogging");
 		startWithObs = obs_data_get_bool(settings, "startWithObs");
 
 
@@ -393,7 +383,6 @@ bool obs_module_load(void)
 		if (mouseFps == 0) mouseFps = 50;
 		moveThrottleMs.store(1000 / mouseFps);
 
-		enableLogging = obs_data_get_bool(settings, "enableLogging");
 		startWithObs = obs_data_get_bool(settings, "startWithObs");
 
 		
@@ -449,7 +438,6 @@ void obs_module_unload(void)
 	obs_data_set_bool(currentSettings, "sendScroll", sendScroll);
 	obs_data_set_bool(currentSettings, "sendPosition", sendPosition);
 	obs_data_set_int(currentSettings, "mouseFps", mouseFps);
-	obs_data_set_bool(currentSettings, "enableLogging", enableLogging);
 	obs_data_set_bool(currentSettings, "startWithObs", startWithObs);
 	
 	SaveLoadSettingsCallback(currentSettings, true);

@@ -25,13 +25,11 @@ void MouseSettingsDialog::setupUi()
 	enableClicksCheck = new SwitchWidget(obs_module_text("Settings.Checkbox.EnableClicks"));
 	enableScrollCheck = new SwitchWidget(obs_module_text("Settings.Checkbox.EnableScroll"));
 	enablePositionCheck = new SwitchWidget(obs_module_text("Settings.Checkbox.EnablePosition"));
-	enableLoggingCheck = new SwitchWidget(obs_module_text("Settings.Checkbox.EnableLogging"));
 	startWithObsCheck = new SwitchWidget(obs_module_text("Settings.Checkbox.StartWithObs"));
 
 	optionsLay->addWidget(enableClicksCheck);
 	optionsLay->addWidget(enableScrollCheck);
 	optionsLay->addWidget(enablePositionCheck);
-	optionsLay->addWidget(enableLoggingCheck);
 	optionsLay->addWidget(startWithObsCheck);
 
 	QHBoxLayout *fpsRow = new QHBoxLayout();
@@ -71,7 +69,6 @@ void MouseSettingsDialog::loadSettings()
 		enableClicksCheck->setChecked(obs_data_get_bool(settings, "sendClicks"));
 		enableScrollCheck->setChecked(obs_data_get_bool(settings, "sendScroll"));
 		enablePositionCheck->setChecked(obs_data_get_bool(settings, "sendPosition"));
-		enableLoggingCheck->setChecked(obs_data_get_bool(settings, "enableLogging"));
 		startWithObsCheck->setChecked(obs_data_get_bool(settings, "startWithObs"));
 
 		int fps = (int)obs_data_get_int(settings, "mouseFps");
@@ -88,7 +85,6 @@ void MouseSettingsDialog::saveSettings()
 	obs_data_set_bool(settings, "sendClicks", enableClicksCheck->isChecked());
 	obs_data_set_bool(settings, "sendScroll", enableScrollCheck->isChecked());
 	obs_data_set_bool(settings, "sendPosition", enablePositionCheck->isChecked());
-	obs_data_set_bool(settings, "enableLogging", enableLoggingCheck->isChecked());
 	obs_data_set_bool(settings, "startWithObs", startWithObsCheck->isChecked());
 	obs_data_set_int(settings, "mouseFps", mouseFpsSpin->value());
 

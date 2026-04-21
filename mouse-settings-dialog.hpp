@@ -32,7 +32,6 @@ private:
 	SwitchWidget *enableClicksCheck;
 	SwitchWidget *enableScrollCheck;
 	SwitchWidget *enablePositionCheck;
-	SwitchWidget *enableLoggingCheck;
 	SwitchWidget *startWithObsCheck;
 
 	QSpinBox *mouseFpsSpin;
