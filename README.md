@@ -37,20 +37,24 @@ cmake --build build_macos --config Release
 ./deploy_macos.sh
 ```
 
-## 📜 Event Protocol
+## 📜 WebSocket Protocol
 
-The plugin emits a `mouse_monitor_event` to targeted browser sources with a JSON payload:
+The plugin broadcasts data to dedicated topics via the **Unified Port Architecture** (`port 4466`).
 
+### Available Topics
+- **Position**: `ws://${window.location.host}/ws/mouse/position`
+- **Clicks**: `ws://${window.location.host}/ws/mouse/click`
+- **Scroll**: `ws://${window.location.host}/ws/mouse/scroll`
+- **General**: `ws://${window.location.host}/ws/mouse` (Aggregated events)
+
+### Event Payload
 ```json
 {
-  "mouse": {
-    "action": "Left Click",
-    "x": 1920,
-    "y": 1080,
-    "scroll_speed": 0.0
-  }
+  "a": "position/x",
+  "v": 1920.0
 }
 ```
+*Where `a` is the address/sub-topic and `v` is the value.*
 
 ## 🤝 Credits
 

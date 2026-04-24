@@ -28,7 +28,7 @@
 #endif
 
 OBS_DECLARE_MODULE()
-OBS_MODULE_AUTHOR("Antigravity")
+OBS_MODULE_AUTHOR("mediaWarp")
 OBS_MODULE_USE_DEFAULT_LOCALE("mouse-monitor-plugin", "en-US")
 
 #ifdef _WIN32
@@ -61,25 +61,42 @@ uint64_t mouseFps = 50;
 std::atomic<uint64_t> moveThrottleMs{20};
 
 bool startWithObs = true;
+bool enableLogging = false;
+bool sendGeneralRoute = true;
 
 // UI
 static QPointer<MouseSettingsDialog> settingsDialog;
 
 void broadcastMouseSignal(const char *addr, double val)
 {
-	obs_data_t *packet = obs_data_create();
-	obs_data_set_string(packet, "t", "mouse");
-	obs_data_set_string(packet, "a", addr);
-	obs_data_set_double(packet, "v", val);
+    obs_data_t *packet = obs_data_create();
+    obs_data_set_string(packet, "a", addr);
+    obs_data_set_double(packet, "v", val);
 
-	signal_handler_t *sh = obs_get_signal_handler();
-	if (sh) {
-		calldata_t cd = {0};
-		calldata_set_ptr(&cd, "packet", packet);
-		signal_handler_signal(sh, "media_warp_transmit", &cd);
-	}
+    if (enableLogging && settingsDialog) {
+        QMetaObject::invokeMethod(settingsDialog, "AppendLog", Qt::QueuedConnection,
+                                Q_ARG(QString, QString("Signal: %1 = %2").arg(addr).arg(val)));
+    }
 
-	obs_data_release(packet);
+    signal_handler_t *sh = obs_get_signal_handler();
+    if (sh) {
+        calldata_t cd = {0};
+        calldata_set_ptr(&cd, "packet", packet);
+        
+        // 1. Send to specific route: mouse/click, mouse/scroll, mouse/position
+        std::string sAddr = addr;
+        std::string topic = "mouse/" + sAddr.substr(0, sAddr.find('/'));
+        obs_data_set_string(packet, "t", topic.c_str());
+        signal_handler_signal(sh, "media_warp_transmit", &cd);
+
+        // 2. Send to general route if enabled: mouse
+        if (sendGeneralRoute) {
+            obs_data_set_string(packet, "t", "mouse");
+            signal_handler_signal(sh, "media_warp_transmit", &cd);
+        }
+    }
+
+    obs_data_release(packet);
 }
 
 static void on_media_warp_receive(void *data, calldata_t *cd)
@@ -114,8 +131,8 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 			uint64_t now = os_gettime_ns() / 1000000;
 			if (now - lastMoveTimestamp.load() > moveThrottleMs.load()) {
 				lastMoveTimestamp.store(now);
-				broadcastMouseSignal("move/x", (double)p->pt.x);
-				broadcastMouseSignal("move/y", (double)p->pt.y);
+				broadcastMouseSignal("position/x", (double)p->pt.x);
+				broadcastMouseSignal("position/y", (double)p->pt.y);
 			}
 		}
 
@@ -201,8 +218,8 @@ CGEventRef CGEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef e
 			uint64_t now = os_gettime_ns() / 1000000;
 			if (now - lastMoveTimestamp.load() > moveThrottleMs.load()) {
 				lastMoveTimestamp.store(now);
-				broadcastMouseSignal("move/x", (double)location.x);
-				broadcastMouseSignal("move/y", (double)location.y);
+				broadcastMouseSignal("position/x", (double)location.x);
+				broadcastMouseSignal("position/y", (double)location.y);
 			}
 		}
 	}
@@ -357,7 +374,8 @@ obs_data_t *SaveLoadSettingsCallback(obs_data_t *settings, bool saving)
 		moveThrottleMs.store(1000 / mouseFps);
 
 		startWithObs = obs_data_get_bool(settings, "startWithObs");
-
+		enableLogging = obs_data_get_bool(settings, "enableLogging");
+		sendGeneralRoute = obs_data_get_bool(settings, "sendGeneralRoute");
 
 		return NULL;
 	} else {
@@ -384,6 +402,8 @@ bool obs_module_load(void)
 		moveThrottleMs.store(1000 / mouseFps);
 
 		startWithObs = obs_data_get_bool(settings, "startWithObs");
+		enableLogging = obs_data_get_bool(settings, "enableLogging");
+		sendGeneralRoute = obs_data_get_bool(settings, "sendGeneralRoute");
 
 		
 		obs_data_release(settings);
@@ -439,6 +459,8 @@ void obs_module_unload(void)
 	obs_data_set_bool(currentSettings, "sendPosition", sendPosition);
 	obs_data_set_int(currentSettings, "mouseFps", mouseFps);
 	obs_data_set_bool(currentSettings, "startWithObs", startWithObs);
+	obs_data_set_bool(currentSettings, "enableLogging", enableLogging);
+	obs_data_set_bool(currentSettings, "sendGeneralRoute", sendGeneralRoute);
 	
 	SaveLoadSettingsCallback(currentSettings, true);
 	obs_data_release(currentSettings);

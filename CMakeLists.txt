@@ -61,7 +61,7 @@ endif()
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${OBS_SHARED_DIR}
 )
 
@@ -117,8 +117,8 @@ endif()
 
 # Version header
 configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/version.h.in
-  ${CMAKE_CURRENT_SOURCE_DIR}/version.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/version.h
 )
 
 # Windows installer script template
@@ -131,14 +131,13 @@ endif()
 
 # Sources
 target_sources(${PROJECT_NAME} PRIVATE
-  mouse-monitor-plugin.cpp
-  mouse-monitor-plugin.hpp
-  mouse-settings-dialog.cpp
-  mouse-settings-dialog.hpp
-  streamup-ui.hpp
-  obs-websocket-api.h
+  src/mouse-monitor-plugin.cpp
+  src/mouse-monitor-plugin.hpp
+  src/mouse-settings-dialog.cpp
+  src/mouse-settings-dialog.hpp
+  src/obs-websocket-api.h
   resources.qrc
-  version.h
+  src/version.h
 )
 
 # Install / properties depending on build context

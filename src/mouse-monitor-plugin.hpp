@@ -19,6 +19,7 @@ extern std::atomic<uint64_t> lastMoveTimestamp;
 extern bool sendClicks;
 extern bool sendScroll;
 extern bool sendPosition;
+extern bool sendGeneralRoute;
 extern uint64_t mouseFps;
 extern std::atomic<uint64_t> moveThrottleMs;
 

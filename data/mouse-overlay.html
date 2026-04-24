@@ -177,13 +177,9 @@
 <body>
     <div id="monitor-panel">
         <h3>Mouse Monitor</h3>
-        <div class="monitor-row" style="display:none;">
-            <span class="monitor-label">Keys:</span>
-            <span id="mon-keys" class="monitor-value">None</span>
-        </div>
         <div class="monitor-row">
-            <span class="monitor-label">Move:</span>
-            <span id="mon-move" class="monitor-value">None</span>
+            <span class="monitor-label">Position:</span>
+            <span id="mon-position" class="monitor-value">None</span>
         </div>
         <div class="monitor-row">
             <span class="monitor-label">Click:</span>
@@ -205,6 +201,7 @@
 
         const params = new URLSearchParams(window.location.search);
         const showMonitor = params.get('monitor') !== '0';
+        const targetTopic = params.get('topic') || '';
 
         if (showMonitor) {
             document.getElementById('monitor-panel').style.display = 'block';
@@ -216,65 +213,53 @@
         let mouseX = 0;
         let mouseY = 0;
 
-        // WebSocket Connection to Central Bridge (Secure V3 Handshake)
+        // WebSocket Connection to Dynamic Route
         async function connectBridge() {
             try {
-                // 1. Discovery: Identify the bridge port via HTTP API
-                const res = await fetch('/__lws/ws_port');
-                if (!res.ok) throw new Error('Failed to fetch bridge port');
+                const port = window.location.port || '4466';
+                let wsUrl = `ws://127.0.0.1:${port}/ws/`;
                 
-                const port = (await res.text()).trim();
-                console.log(`Connecting to Media Warp Bridge on port ${port}...`);
-                
-                const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+                // Use the full topic from query parameter (e.g. topic=mouse/click)
+                // Default to 'mouse' if no topic is provided
+                if (targetTopic) {
+                    wsUrl += targetTopic;
+                } else {
+                    wsUrl += "mouse";
+                }
+
+                console.log(`Connecting to ${wsUrl}...`);
+                const socket = new WebSocket(wsUrl);
 
                 socket.onopen = () => {
-                    console.log('Bridge connection opened, requesting credentials...');
-                    // 2. Request Handshake: Ask the bridge to emit credentials
-                    socket.send(JSON.stringify({ cmd: "get_obs_credentials" }));
+                    console.log('Mouse monitor connection established');
                 };
 
                 socket.onmessage = (msg) => {
                     try {
                         const data = JSON.parse(msg.data);
-                        if (data.t === 'mouse') {
-                            processSignal(data);
-                        }
+                        processSignal(data);
                     } catch (e) {
-                        console.error('Failed to parse bridge message:', e);
+                        console.error('Failed to parse message:', e);
                     }
                 };
 
                 socket.onclose = () => {
-                    console.warn('Bridge connection lost. Retrying in 2s...');
+                    console.warn('Connection lost. Retrying in 2s...');
                     setTimeout(connectBridge, 2000);
                 };
 
                 socket.onerror = (err) => {
-                    console.error('Bridge socket error:', err);
+                    console.error('Socket error:', err);
                 };
 
             } catch (e) {
-                console.warn('Discovery failed, retrying in 2s...', e);
+                console.warn('Connection failed, retrying in 2s...', e);
                 setTimeout(connectBridge, 2000);
             }
         }
 
-        // 3. Reception: Handle Secure Out-of-Band Callback
-        window.addEventListener('obs_auth', (e) => {
-            const { port, password } = e.detail;
-            console.log(`Received OBS credentials for port ${port}`);
-            // Note: Mouse signals are broadcast publicly via the bridge, 
-            // but credentials can be used here if direct OBS access is needed.
-        });
-
-        // Start discovery after 2s delay to allow plugin initialization
-        window.addEventListener('load', () => setTimeout(connectBridge, 2000));
-
-        // Broadcast Channels for each event type
-        const moveChannel = new BroadcastChannel('mouse-monitor-move');
-        const clickChannel = new BroadcastChannel('mouse-monitor-click');
-        const scrollChannel = new BroadcastChannel('mouse-monitor-scroll');
+        // Start connection
+        connectBridge();
 
         function updateMonitorUI(type, value) {
             if (!showMonitor) return;
@@ -282,27 +267,18 @@
             if (el) el.textContent = value;
         }
 
-        // Internal monitor updates from other sources (if multiple hubs exist)
-        if (showMonitor) {
-            moveChannel.onmessage = (e) => updateMonitorUI('move', `${Math.round(e.data.x)}, ${Math.round(e.data.y)}`);
-            clickChannel.onmessage = (e) => updateMonitorUI('click', e.data);
-            scrollChannel.onmessage = (e) => updateMonitorUI('scroll', e.data.action);
-        }
-
         function processSignal(data) {
             const { a: addr, v: val } = data;
 
             // Handle Mouse Position
-            if (addr === "move/x") {
+            if (addr === "position/x") {
                 mouseX = val;
                 updateCursor(mouseX, mouseY);
-                updateMonitorUI('move', `${Math.round(mouseX)}, ${Math.round(mouseY)}`);
-                moveChannel.postMessage({ x: mouseX, y: mouseY });
-            } else if (addr === "move/y") {
+                updateMonitorUI('position', `${Math.round(mouseX)}, ${Math.round(mouseY)}`);
+            } else if (addr === "position/y") {
                 mouseY = val;
                 updateCursor(mouseX, mouseY);
-                updateMonitorUI('move', `${Math.round(mouseX)}, ${Math.round(mouseY)}`);
-                moveChannel.postMessage({ x: mouseX, y: mouseY });
+                updateMonitorUI('position', `${Math.round(mouseX)}, ${Math.round(mouseY)}`);
             }
 
             // Handle Clicks
@@ -317,7 +293,6 @@
                 }
 
                 addCombination({ mouse: { action: action } });
-                clickChannel.postMessage(action);
                 updateMonitorUI('click', action);
             }
 
@@ -330,7 +305,6 @@
                     action = val > 0 ? "Scroll Left" : "Scroll Right";
                 }
 
-                scrollChannel.postMessage({ action: action, speed: 0 });
                 updateMonitorUI('scroll', action);
                 addCombination({ mouse: { action: action } });
             }
@@ -340,33 +314,13 @@
             }
         }
 
-        // Deprecated: processInput was used for the old direct event format
-        function processInput(event) {
-            // No longer used, handled by processSignal
-        }
-
         function addCombination(event) {
             const container = document.createElement('div');
             container.className = 'combo-container';
 
-            const keys = event.key_combination ? event.key_combination.split(' + ') : [];
             const mouseAction = event.mouse ? event.mouse.action : null;
 
-            keys.forEach((k, i) => {
-                const keyEl = document.createElement('span');
-                keyEl.className = 'key';
-                keyEl.textContent = k;
-                container.appendChild(keyEl);
-
-                if (i < keys.length - 1 || mouseAction) {
-                    const sep = document.createElement('span');
-                    sep.className = 'separator';
-                    sep.textContent = ' + ';
-                    container.appendChild(sep);
-                }
-            });
-
-            if (mouseAction && mouseAction !== "Move") {
+            if (mouseAction) {
                 const mouseEl = document.createElement('span');
                 mouseEl.className = 'mouse-action';
                 mouseEl.textContent = mouseAction;
@@ -408,8 +362,7 @@
             }, 500);
         }
 
-        // Initialization complete
-        console.log('Mouse Monitor Overlay ready for bridge signals');
+        console.log('Mouse Monitor Overlay ready');
     </script>
 </body>
 
